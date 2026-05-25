@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Agent Research Assistant | Powered by Gemini</title>
+  <meta name="description" content="A sequential multi-agent AI research pipeline powered by Google Gemini 1.5 Flash." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/libs/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
+
+  <style>
+    /* ── Design Tokens ─────────────────────────────────────── */
+    :root {
+      --bg-base:        #07070f;
+      --bg-surface:     #0f0f1a;
+      --bg-card:        rgba(255,255,255,0.04);
+      --bg-input:       rgba(255,255,255,0.06);
+      --accent-purple:  #a855f7;
+      --accent-cyan:    #22d3ee;
+      --accent-green:   #4ade80;
+      --accent-amber:   #fbbf24;
+      --accent-red:     #f87171;
+      --grad-primary:   linear-gradient(135deg,#a855f7,#22d3ee);
+      --text-primary:   #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted:     #475569;
+      --border:         rgba(255,255,255,0.08);
+      --border-active:  rgba(168,85,247,0.5);
+      --radius-sm: 8px; --radius-md: 14px;
+      --radius-lg: 20px; --radius-xl: 28px;
+      --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-glow: 0 0 30px rgba(168,85,247,0.25);
+      --shadow-cyan: 0 0 30px rgba(34,211,238,0.2);
+      --transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    html { scroll-behavior:smooth; }
+
+    body {
+      font-family:'Inter',system-ui,sans-serif;
+      background:var(--bg-base);
+      color:var(--text-primary);
+      min-height:100vh;
+      overflow-x:hidden;
+      line-height:1.6;
+    }
+
+    /* Background orbs */
+    body::before,body::after {
+      content:'';position:fixed;border-radius:50%;
+      filter:blur(120px);pointer-events:none;z-index:0;
+    }
+    body::before {
+      width:600px;height:600px;
+      background:radial-gradient(circle,rgba(168,85,247,0.12) 0%,transparent 70%);
+      top:-200px;left:-200px;
+    }
+    body::after {
+      width:500px;height:500px;
+      background:radial-gradient(circle,rgba(34,211,238,0.10) 0%,transparent 70%);
+      bottom:-150px;right:-150px;
+    }
+
+    .container {
+      max-width:920px;margin:0 auto;
+      padding:0 24px 80px;position:relative;z-index:1;
+    }
+
+    /* ── Header ────────────────────────────────────────────── */
+    .header { text-align:center; padding:56px 0 40px; }
+
+    .header-badge {
+      display:inline-flex;align-items:center;gap:8px;
+      background:rgba(168,85,247,0.12);
+      border:1px solid rgba(168,85,247,0.3);
+      border-radius:40px;padding:6px 18px;
+      font-size:12px;font-weight:600;
+      letter-spacing:0.08em;text-transform:uppercase;
+      color:var(--accent-purple);margin-bottom:24px;
+    }
+
+    h1.header-title {
+      font-size:clamp(2rem,5vw,3.2rem);font-weight:800;
+      letter-spacing:-0.03em;line-height:1.15;
+      background:var(--grad-primary);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      background-clip:text;margin-bottom:16px;
+    }
+
+    .header-subtitle {
+      font-size:1.05rem;color:var(--text-secondary);
+      max-width:560px;margin:0 auto;font-weight:400;
+    }
+
+
+    /* ── Config Card ───────────────────────────────────────── */
+    .config-card {
+      background:var(--bg-card);border:1px solid var(--border);
+      border-radius:var(--radius-xl);padding:32px;margin-bottom:40px;
+      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    }
+
+    .config-card h2 {
+      font-size:1rem;font-weight:600;color:var(--text-secondary);
+      text-transform:uppercase;letter-spacing:0.06em;margin-bottom:24px;
+    }
+
+    .form-group { margin-bottom:20px; }
+    .form-group label {
+      display:block;font-size:0.85rem;font-weight:500;
+      color:var(--text-secondary);margin-bottom:8px;letter-spacing:0.02em;
+    }
+
+    .form-group textarea,
+    .form-group input[type="text"],
+    .form-group input[type="password"] {
+      width:100%;background:var(--bg-input);border:1px solid var(--border);
+      border-radius:var(--radius-md);padding:14px 16px;
+      color:var(--text-primary);font-family:'Inter',sans-serif;
+      font-size:0.95rem;transition:var(--transition);outline:none;resize:none;
+    }
+
+    .form-group textarea:focus,
+    .form-group input:focus {
+      border-color:var(--accent-purple);
+      box-shadow:0 0 0 3px rgba(168,85,247,0.15);
+      background:rgba(255,255,255,0.07);
+    }
+
+    .form-group textarea { min-height:80px; }
+
+
+
+    /* ── Launch Button ─────────────────────────────────────── */
+    #btn-launch {
+      width:100%;padding:16px 32px;
+      background:var(--grad-primary);border:none;
+      border-radius:var(--radius-md);color:#fff;
+      font-family:'Inter',sans-serif;font-size:1rem;
+      font-weight:700;letter-spacing:0.02em;
+      cursor:pointer;transition:var(--transition);
+      position:relative;overflow:hidden;margin-top:8px;
+    }
+    #btn-launch::before {
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(255,255,255,0.15),transparent);
+      opacity:0;transition:var(--transition);
+    }
+    #btn-launch:hover:not(:disabled)::before { opacity:1; }
+    #btn-launch:hover:not(:disabled) {
+      transform:translateY(-2px);
+      box-shadow:0 8px 30px rgba(168,85,247,0.45);
+    }
+    #btn-launch:disabled { opacity:0.6;cursor:not-allowed;transform:none; }
+
+    /* ── Pipeline ──────────────────────────────────────────── */
+    .pipeline-label {
+      text-align:center;font-size:0.8rem;font-weight:600;
+      color:var(--text-muted);text-transform:uppercase;
+      letter-spacing:0.1em;margin-bottom:28px;
+    }
+
+    .pipeline { display:flex;flex-direction:column;gap:0; }
+
+    /* ── Agent Card ────────────────────────────────────────── */
+    .agent-card {
+      background:var(--bg-card);border:1px solid var(--border);
+      border-radius:var(--radius-lg);padding:28px;
+      transition:var(--transition);
+      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      position:relative;overflow:hidden;
+    }
+    .agent-card::before {
+      content:'';position:absolute;top:0;left:0;right:0;
+      height:1px;background:var(--grad-primary);opacity:0;transition:var(--transition);
+    }
+    .agent-card.card-active { border-color:var(--border-active);box-shadow:var(--shadow-glow); }
+    .agent-card.card-active::before { opacity:1; }
+    .agent-card.card-done { border-color:rgba(74,222,128,0.3); }
+    .agent-card.card-error { border-color:rgba(248,113,113,0.4); }
+
+    .card-header { display:flex;align-items:center;gap:16px;margin-bottom:16px; }
+
+    .agent-icon {
+      width:48px;height:48px;border-radius:var(--radius-sm);
+      background:var(--grad-primary);display:flex;align-items:center;
+      justify-content:center;font-size:1.5rem;flex-shrink:0;
+      box-shadow:0 4px 12px rgba(168,85,247,0.3);
+    }
+
+    .agent-meta { flex:1;min-width:0; }
+    .agent-name { font-size:1.05rem;font-weight:700;color:var(--text-primary);margin-bottom:2px; }
+    .agent-role { font-size:0.78rem;color:var(--text-muted);font-weight:400; }
+
+    .card-right { display:flex;align-items:center;gap:12px;flex-shrink:0; }
+
+    /* Status Badge */
+    .status-badge {
+      display:inline-flex;align-items:center;gap:6px;
+      padding:5px 14px;border-radius:40px;font-size:0.75rem;
+      font-weight:600;letter-spacing:0.04em;transition:var(--transition);
+    }
+    .status-idle { background:rgba(71,85,105,0.3);color:var(--text-muted);border:1px solid rgba(71,85,105,0.3); }
+    .status-thinking {
+      background:rgba(168,85,247,0.15);color:var(--accent-purple);
+      border:1px solid rgba(168,85,247,0.4);
+      animation:pulse-badge 1.5s ease-in-out infinite;
+    }
+    .status-done { background:rgba(74,222,128,0.12);color:var(--accent-green);border:1px solid rgba(74,222,128,0.35); }
+    .status-error { background:rgba(248,113,113,0.12);color:var(--accent-red);border:1px solid rgba(248,113,113,0.35); }
+
+    @keyframes pulse-badge {
+      0%,100% { box-shadow:none; }
+      50%      { box-shadow:0 0 12px rgba(168,85,247,0.4); }
+    }
+
+    /* Spinner */
+    .agent-spinner {
+      display:none;width:18px;height:18px;
+      border:2px solid rgba(168,85,247,0.2);
+      border-top-color:var(--accent-purple);
+      border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Output Area */
+    .agent-output {
+      background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.05);
+      border-radius:var(--radius-sm);padding:16px;
+      min-height:80px;max-height:260px;overflow-y:auto;
+      font-family:'JetBrains Mono',monospace;font-size:0.78rem;
+      color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;
+      word-break:break-word;transition:var(--transition);
+      scrollbar-width:thin;scrollbar-color:rgba(168,85,247,0.3) transparent;
+    }
+    .agent-output::-webkit-scrollbar { width:4px; }
+    .agent-output::-webkit-scrollbar-thumb { background:rgba(168,85,247,0.3);border-radius:4px; }
+
+    .output-placeholder { color:var(--text-muted);font-style:italic;font-family:'Inter',sans-serif;font-size:0.82rem; }
+
+    /* ── Connector ─────────────────────────────────────────── */
+    .connector {
+      display:flex;flex-direction:column;align-items:center;
+      padding:4px 0; position:relative;
+    }
+    .connector-line {
+      width:2px;height:32px;background:var(--border);
+      position:relative;overflow:hidden;border-radius:2px;
+    }
+    .connector-line::after {
+      content:'';position:absolute;top:-100%;left:0;
+      width:100%;height:100%;background:var(--grad-primary);transition:top 0.6s ease;
+    }
+    .connector.connector-filled .connector-line::after { top:0; }
+    .connector-arrow { font-size:0.85rem;color:var(--text-muted);line-height:1;transition:var(--transition); }
+    .connector.connector-filled .connector-arrow { color:var(--accent-cyan); }
+
+    /* ── Final Report ──────────────────────────────────────── */
+    #final-report-section {
+      display:none;margin-top:40px;
+      background:var(--bg-card);
+      border:1px solid rgba(34,211,238,0.25);
+      border-radius:var(--radius-xl);padding:32px;
+      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      box-shadow:var(--shadow-cyan);position:relative;overflow:hidden;
+    }
+    #final-report-section::before {
+      content:'';position:absolute;top:0;left:0;right:0;height:2px;
+      background:linear-gradient(90deg,var(--accent-purple),var(--accent-cyan));
+    }
+
+    .report-header {
+      display:flex;align-items:center;justify-content:space-between;
+      flex-wrap:wrap;gap:16px;margin-bottom:24px;
+    }
+    .report-title {
+      font-size:1.15rem;font-weight:700;
+      background:linear-gradient(90deg,var(--accent-cyan),var(--accent-purple));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    }
+    .report-actions { display:flex;gap:10px;flex-wrap:wrap; }
+
+    .btn-secondary {
+      display:inline-flex;align-items:center;gap:6px;
+      padding:9px 18px;background:var(--bg-input);
+      border:1px solid var(--border);border-radius:var(--radius-sm);
+      color:var(--text-primary);font-family:'Inter',sans-serif;
+      font-size:0.85rem;font-weight:500;cursor:pointer;transition:var(--transition);
+    }
+    .btn-secondary:hover { border-color:var(--accent-cyan);color:var(--accent-cyan);background:rgba(34,211,238,0.08); }
+
+    #final-report-content {
+      background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.05);
+      border-radius:var(--radius-md);padding:24px;max-height:500px;overflow-y:auto;
+      font-family:'JetBrains Mono',monospace;font-size:0.8rem;
+      color:var(--text-secondary);line-height:1.75;white-space:pre-wrap;word-break:break-word;
+      scrollbar-width:thin;scrollbar-color:rgba(34,211,238,0.3) transparent;
+    }
+    #final-report-content::-webkit-scrollbar { width:4px; }
+    #final-report-content::-webkit-scrollbar-thumb { background:rgba(34,211,238,0.3);border-radius:4px; }
+
+    /* ── Toasts ────────────────────────────────────────────── */
+    #toast-container {
+      position:fixed;bottom:28px;right:28px;z-index:9999;
+      display:flex;flex-direction:column-reverse;gap:10px;pointer-events:none;
+    }
+    .toast {
+      background:var(--bg-surface);border:1px solid var(--border);
+      border-radius:var(--radius-md);padding:14px 20px;
+      font-size:0.88rem;font-weight:500;color:var(--text-primary);
+      max-width:340px;opacity:0;transform:translateY(12px) scale(0.96);
+      transition:opacity 0.35s ease,transform 0.35s ease;
+      backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      box-shadow:var(--shadow-card);pointer-events:auto;
+    }
+    .toast.toast-visible { opacity:1;transform:none; }
+    .toast-success { border-left:3px solid var(--accent-green); }
+    .toast-error   { border-left:3px solid var(--accent-red); }
+    .toast-warning { border-left:3px solid var(--accent-amber); }
+    .toast-info    { border-left:3px solid var(--accent-purple); }
+
+    /* ── Error Banner ──────────────────────────────────────── */
+    .error-banner {
+      background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.3);
+      border-radius:var(--radius-md);padding:14px 18px;margin-top:12px;
+      color:var(--accent-red);font-size:0.88rem;display:none;
+    }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    .footer { text-align:center;padding:40px 0 0;font-size:0.8rem;color:var(--text-muted); }
+    .footer span {
+      background:var(--grad-primary);-webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;background-clip:text;font-weight:600;
+    }
+
+    @media(max-width:600px) {
+      .container { padding:0 16px 60px; }
+      .header { padding:36px 0 28px; }
+      .config-card,.agent-card { padding:20px; }
+      #final-report-section { padding:20px; }
+      .report-header { flex-direction:column;align-items:flex-start; }
+      .agent-icon { width:40px;height:40px;font-size:1.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toast-container" aria-live="polite"></div>
+
+  <div class="container">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-badge">🤖 AI Research Pipeline &nbsp;·&nbsp; OpenAI / Groq</div>
+      <h1 class="header-title">Multi-Agent Research<br/>Assistant</h1>
+      <p class="header-subtitle">
+        Four specialized AI agents collaborate in sequence to plan, research,
+        write, and review any topic — producing a publication-ready report.
+      </p>
+    </header>
+
+
+    <!-- Config -->
+    <section class="config-card">
+      <h2>⚙️ Configure Research</h2>
+
+      <div class="form-group">
+        <label for="input-topic">Research Topic</label>
+        <textarea id="input-topic" placeholder="e.g. The Role of Artificial Intelligence in Modern Drug Discovery" rows="3"></textarea>
+      </div>
+
+
+
+
+
+      <div class="error-banner" id="error-banner"></div>
+
+      <button id="btn-launch" type="button">🚀 Launch Research Pipeline</button>
+    </section>
+
+    <!-- Pipeline -->
+    <p class="pipeline-label">— Sequential Agent Pipeline —</p>
+
+    <main class="pipeline">
+
+      <!-- Agent 1: Planner -->
+      <article class="agent-card" id="card-planner">
+        <div class="card-header">
+          <div class="agent-icon">🧭</div>
+          <div class="agent-meta">
+            <div class="agent-name">Planner Agent</div>
+            <div class="agent-role">Stage 1 · Structural Decomposition</div>
+          </div>
+          <div class="card-right">
+            <div class="agent-spinner"></div>
+            <span class="status-badge status-idle">Idle</span>
+          </div>
+        </div>
+        <div class="agent-output" id="output-planner"><span class="output-placeholder">Waiting for topic input…</span></div>
+      </article>
+
+      <div class="connector" id="connector-planner">
+        <div class="connector-line"></div>
+        <div class="connector-arrow">▼</div>
+        <div class="connector-line"></div>
+      </div>
+
+      <!-- Agent 2: Researcher -->
+      <article class="agent-card" id="card-researcher">
+        <div class="card-header">
+          <div class="agent-icon">🔬</div>
+          <div class="agent-meta">
+            <div class="agent-name">Researcher Agent</div>
+            <div class="agent-role">Stage 2 · Deep Content Research</div>
+          </div>
+          <div class="card-right">
+            <div class="agent-spinner"></div>
+            <span class="status-badge status-idle">Idle</span>
+          </div>
+        </div>
+        <div class="agent-output" id="output-researcher"><span class="output-placeholder">Awaiting Planner output…</span></div>
+      </article>
+
+      <div class="connector" id="connector-researcher">
+        <div class="connector-line"></div>
+        <div class="connector-arrow">▼</div>
+        <div class="connector-line"></div>
+      </div>
+
+      <!-- Agent 3: Writer -->
+      <article class="agent-card" id="card-writer">
+        <div class="card-header">
+          <div class="agent-icon">✍️</div>
+          <div class="agent-meta">
+            <div class="agent-name">Writer Agent</div>
+            <div class="agent-role">Stage 3 · Prose Composition</div>
+          </div>
+          <div class="card-right">
+            <div class="agent-spinner"></div>
+            <span class="status-badge status-idle">Idle</span>
+          </div>
+        </div>
+        <div class="agent-output" id="output-writer"><span class="output-placeholder">Awaiting Researcher output…</span></div>
+      </article>
+
+      <div class="connector" id="connector-writer">
+        <div class="connector-line"></div>
+        <div class="connector-arrow">▼</div>
+        <div class="connector-line"></div>
+      </div>
+
+      <!-- Agent 4: Reviewer -->
+      <article class="agent-card" id="card-reviewer">
+        <div class="card-header">
+          <div class="agent-icon">🔍</div>
+          <div class="agent-meta">
+            <div class="agent-name">Reviewer Agent</div>
+            <div class="agent-role">Stage 4 · Peer Review &amp; Quality Scoring</div>
+          </div>
+          <div class="card-right">
+            <div class="agent-spinner"></div>
+            <span class="status-badge status-idle">Idle</span>
+          </div>
+        </div>
+        <div class="agent-output" id="output-reviewer"><span class="output-placeholder">Awaiting Writer output…</span></div>
+      </article>
+
+      <div class="connector" id="connector-reviewer">
+        <div class="connector-line"></div>
+        <div class="connector-arrow">▼</div>
+        <div class="connector-line"></div>
+      </div>
+
+    </main>
+
+    <!-- Final Report -->
+    <section id="final-report-section">
+      <div class="report-header">
+        <div class="report-title">📄 Final Research Report</div>
+        <div class="report-actions">
+          <button class="btn-secondary" id="btn-copy" type="button">📋 Copy Report</button>
+          <button class="btn-secondary" id="btn-download-article" type="button">📥 Article Only</button>
+          <button class="btn-secondary" id="btn-download" type="button">📦 Full Report</button>
+          <button class="btn-secondary" id="btn-download-word" type="button">📄 Word Document</button>
+          <button class="btn-secondary" id="btn-download-ppt" type="button">📊 PowerPoint</button>
+        </div>
+      </div>
+      <pre id="final-report-content"></pre>
+    </section>
+
+    <footer class="footer">
+      <p>Powered by <span>OpenAI / Groq Compatible APIs</span> · Multi-Agent Research Pipeline</p>
+    </footer>
+
+  </div><!-- /container -->
+
+  <!-- ══════════════════════════════════════════════════════
+       ALL JAVASCRIPT — NO IMPORTS, WORKS FROM file://
+  ══════════════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    'use strict';
+
+    // ── Universal LLM API (OpenAI Format) ───────────────────
+    async function callLLM(systemPrompt, userMessage, apiKey, providerModel, onChunk, retries = 5) {
+      let baseUrl, trueModel;
+      
+      const parts = providerModel.split(':');
+      const provider = parts[0];
+      trueModel = parts[1];
+
+      if (provider === 'groq') {
+        baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
+      } else if (provider === 'openai') {
+        baseUrl = 'https://api.openai.com/v1/chat/completions';
+      } else {
+        throw new Error('Unknown provider');
+      }
+
+      const body = {
+        model: trueModel,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage }
+        ],
+        temperature: 0.7,
+        stream: true
+      };
+
+      let response;
+      try {
+        response = await fetch(baseUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(body)
+        });
+      } catch (networkErr) {
+        throw new Error('Network error — check your internet connection. ' + networkErr.message);
+      }
+
+      if (!response.ok) {
+        let msg = `HTTP ${response.status}`;
+        try {
+          const errText = await response.text();
+          msg = JSON.parse(errText)?.error?.message || msg;
+        } catch {}
+
+        if (response.status === 429 && retries > 0) {
+          const match = msg.match(/try again in ([0-9.]+)s/);
+          let waitMs = 5000;
+          if (match && match[1]) {
+            waitMs = (parseFloat(match[1]) * 1000) + 1500; // Exact wait + 1.5s buffer
+          } else {
+            waitMs = (6 - retries) * 5000;
+          }
+          await new Promise(r => setTimeout(r, waitMs));
+          return callLLM(systemPrompt, userMessage, apiKey, providerModel, onChunk, retries - 1);
+        }
+
+        throw new Error(`${provider.toUpperCase()} API error: ${msg}`);
+      }
+
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let fullText  = '';
+      let buffer    = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete tail
+
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const chunk  = parsed?.choices?.[0]?.delta?.content ?? '';
+            if (chunk) {
+              fullText += chunk;
+              if (onChunk) onChunk(chunk);
+            }
+          } catch { /* malformed chunk — skip */ }
+        }
+      }
+      return fullText;
+    }
+
+    // ── UI Helpers ──────────────────────────────────────────
+    function setAgentStatus(agentId, status) {
+      const card    = document.getElementById('card-' + agentId);
+      const badge   = card.querySelector('.status-badge');
+      const spinner = card.querySelector('.agent-spinner');
+
+      badge.className = 'status-badge status-' + status;
+      const labels = { idle:'Idle', thinking:'Thinking…', done:'Done ✓', error:'Error' };
+      badge.textContent = labels[status] || status;
+
+      spinner.style.display = status === 'thinking' ? 'block' : 'none';
+
+      card.classList.remove('card-active', 'card-done', 'card-error');
+      if (status === 'thinking') card.classList.add('card-active');
+      if (status === 'done')     card.classList.add('card-done');
+      if (status === 'error')    card.classList.add('card-error');
+
+      if (status === 'done') {
+        const connector = document.getElementById('connector-' + agentId);
+        if (connector) connector.classList.add('connector-filled');
+      }
+    }
+
+    function clearOutput(agentId) {
+      document.getElementById('output-' + agentId).textContent = '';
+    }
+
+    function appendOutput(agentId, chunk) {
+      const el = document.getElementById('output-' + agentId);
+      el.textContent += chunk;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function resetAll() {
+      ['planner','researcher','writer','reviewer'].forEach(id => {
+        setAgentStatus(id, 'idle');
+        clearOutput(id);
+        const c = document.getElementById('connector-' + id);
+        if (c) c.classList.remove('connector-filled');
+      });
+      document.getElementById('final-report-section').style.display = 'none';
+      document.getElementById('error-banner').style.display = 'none';
+    }
+
+    function showToast(message, type) {
+      const container = document.getElementById('toast-container');
+      const toast     = document.createElement('div');
+      toast.className = 'toast toast-' + (type || 'info');
+      toast.textContent = message;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add('toast-visible'));
+      setTimeout(() => {
+        toast.classList.remove('toast-visible');
+        setTimeout(() => toast.remove(), 400);
+      }, 3500);
+    }
+
+    function setLaunchBtn(enabled) {
+      const btn = document.getElementById('btn-launch');
+      btn.disabled     = !enabled;
+      btn.textContent  = enabled ? '🚀 Launch Research Pipeline' : '⏳ Pipeline Running…';
+    }
+
+    function showError(msg) {
+      const banner = document.getElementById('error-banner');
+      banner.textContent = '❌ ' + msg;
+      banner.style.display = 'block';
+    }
+
+    // ── Agent System Prompts ────────────────────────────────
+    const PLANNER_PROMPT = `Role: You are the Planner Agent, the first stage in a sequential multi-agent research pipeline.
+
+Task: Your job is to take a raw research topic provided by the user and decompose it into a highly structured, logical research outline. You do not write the actual research; you only create the structural blueprint for the subsequent agents.
+
+Instructions:
+1. Analyze the provided research topic.
+2. Break the topic down into 4 to 6 core sections (e.g., Introduction, Core Concepts, Methodologies, Real-World Applications, Conclusion).
+3. For each section, provide 2 to 3 bullet points detailing exactly what needs to be covered.
+4. Output strictly as a clear, hierarchical outline. Do not add conversational filler.`;
+
+    const RESEARCHER_PROMPT = `Role: You are the Researcher Agent, the second stage in a sequential multi-agent research pipeline.
+
+Task: You receive a structured research outline from the Planner Agent. Your job is to populate each section with detailed, factual, well-organized research notes. You do NOT write polished prose — you write informative bullet-point research notes.
+
+Instructions:
+1. Read the outline carefully and respect every section and sub-point.
+2. For each section and bullet point, generate 3 to 5 detailed research notes, facts, statistics, or key concepts.
+3. Include relevant examples, data points, historical context, or expert perspectives.
+4. Clearly label each section heading using the same section titles from the outline.
+5. Keep everything as structured bullet points — no flowing paragraphs.
+6. Be thorough and accurate. Cite sources by name where relevant (e.g., "According to MIT researchers...", "A 2023 WHO report states...").`;
+
+    const WRITER_PROMPT = `Role: You are the Writer Agent, the third stage in a sequential multi-agent research pipeline.
+
+Task: You receive detailed research notes from the Researcher Agent. Transform those notes into a polished, well-structured, engaging research article in Markdown format.
+
+Instructions:
+1. Write a full research article based strictly on the provided notes. Do not invent facts not in the notes.
+2. Use the section titles from the notes as Markdown headings (## for main sections).
+3. Write in clear, formal, engaging academic prose. Each section should have at least 2 to 3 well-developed paragraphs.
+4. Add smooth transitions between sections so the article flows logically.
+5. Begin with a compelling title (# Title) and a short italicized abstract.
+6. End with a properly formatted Conclusion section.
+7. Output the entire article in valid Markdown.`;
+
+    const REVIEWER_PROMPT = `Role: You are the Reviewer Agent, the final stage in a sequential multi-agent research pipeline.
+
+Task: You receive a complete research article draft from the Writer Agent. Critically evaluate it and provide structured, actionable feedback.
+
+Instructions:
+1. Read the full article carefully.
+2. Assign an overall quality score from 1 to 10 with a one-line justification.
+3. List 3 to 5 specific strengths (section: "## ✅ Strengths").
+4. List 3 to 5 specific weaknesses or areas for improvement (section: "## ⚠️ Weaknesses").
+5. Provide 3 to 5 concrete, actionable improvement suggestions referencing specific sections (section: "## 💡 Improvement Suggestions").
+6. End with a short "## 📋 Final Verdict" paragraph summarizing your overall assessment.
+7. Format your entire output in clean Markdown. Be critical but fair and constructive.`;
+
+    // ── Individual Agents ────────────────────────────────────
+    async function runPlanner(topic, apiKey, providerModel) {
+      setAgentStatus('planner', 'thinking');
+      clearOutput('planner');
+      const result = await callLLM(
+        PLANNER_PROMPT,
+        'Research Topic: ' + topic,
+        apiKey,
+        providerModel,
+        (chunk) => appendOutput('planner', chunk)
+      );
+      setAgentStatus('planner', 'done');
+      return result;
+    }
+
+    async function runResearcher(outline, apiKey, providerModel) {
+      setAgentStatus('researcher', 'thinking');
+      clearOutput('researcher');
+      const result = await callLLM(
+        RESEARCHER_PROMPT,
+        'Below is the research outline produced by the Planner Agent. Please generate detailed research notes for each section.\n\n' + outline,
+        apiKey,
+        providerModel,
+        (chunk) => appendOutput('researcher', chunk)
+      );
+      setAgentStatus('researcher', 'done');
+      return result;
+    }
+
+    async function runWriter(notes, apiKey, providerModel) {
+      setAgentStatus('writer', 'thinking');
+      clearOutput('writer');
+      const result = await callLLM(
+        WRITER_PROMPT,
+        'Below are the detailed research notes produced by the Researcher Agent. Please write a full, polished research article in Markdown format.\n\n' + notes,
+        apiKey,
+        providerModel,
+        (chunk) => appendOutput('writer', chunk)
+      );
+      setAgentStatus('writer', 'done');
+      return result;
+    }
+
+    async function runReviewer(draft, apiKey, providerModel) {
+      setAgentStatus('reviewer', 'thinking');
+      clearOutput('reviewer');
+      const result = await callLLM(
+        REVIEWER_PROMPT,
+        'Below is the research article draft produced by the Writer Agent. Please review it and provide your structured critique.\n\n' + draft,
+        apiKey,
+        providerModel,
+        (chunk) => appendOutput('reviewer', chunk)
+      );
+      setAgentStatus('reviewer', 'done');
+      return result;
+    }
+
+    // ── Pipeline Orchestrator ───────────────────────────────
+    let finalReport   = '';
+    let articleDraft  = '';
+
+    async function runPipeline(topic, apiKey, providerModel) {
+      setLaunchBtn(false);
+      resetAll();
+
+      try {
+        showToast('🧭 Planner Agent started…', 'info');
+        const outline = await runPlanner(topic, apiKey, providerModel);
+        showToast('✅ Planner complete!', 'success');
+
+        showToast('🔬 Researcher Agent started…', 'info');
+        const notes = await runResearcher(outline, apiKey, providerModel);
+        showToast('✅ Researcher complete!', 'success');
+
+        showToast('✍️ Writer Agent started…', 'info');
+        const draft = await runWriter(notes, apiKey, providerModel);
+        showToast('✅ Writer complete!', 'success');
+        articleDraft = draft;
+
+        showToast('🔍 Reviewer Agent started…', 'info');
+        const review = await runReviewer(draft, apiKey, providerModel);
+        showToast('✅ Reviewer complete!', 'success');
+
+        // Assemble final report
+        finalReport = [
+          '# 📄 Research Report: ' + topic,
+          '',
+          '---',
+          '',
+          '## 🗂️ Research Outline (Planner Agent)',
+          '',
+          outline,
+          '',
+          '---',
+          '',
+          '## 📝 Full Research Article (Writer Agent)',
+          '',
+          draft,
+          '',
+          '---',
+          '',
+          '## 🔍 Peer Review (Reviewer Agent)',
+          '',
+          review,
+          '',
+          '---',
+          '*Generated by Multi-Agent Research Assistant · OpenAI Compatible Engine*'
+        ].join('\n');
+
+        const reportEl = document.getElementById('final-report-section');
+        document.getElementById('final-report-content').textContent = finalReport;
+        reportEl.style.display = 'block';
+        reportEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        showToast('🎉 Pipeline complete! Report ready.', 'success');
+
+      } catch (err) {
+        showToast('❌ ' + err.message, 'error');
+        showError(err.message);
+        console.error('[Pipeline Error]', err);
+        // Mark any still-thinking agent as error
+        ['planner','researcher','writer','reviewer'].forEach(id => {
+          const badge = document.querySelector('#card-' + id + ' .status-badge');
+          if (badge && badge.classList.contains('status-thinking')) {
+            setAgentStatus(id, 'error');
+            appendOutput(id, '\n\n❌ ' + err.message);
+          }
+        });
+      } finally {
+        setLaunchBtn(true);
+      }
+    }
+
+    // ── Download Helper ─────────────────────────────────────
+    function downloadMd(content, filename) {
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+      showToast('📥 Downloading ' + filename, 'success');
+    }
+
+    function topicSlug() {
+      return (document.getElementById('input-topic').value.trim() || 'report')
+        .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 60);
+    }
+
+    // ── Wire Up Events ──────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+
+
+
+      // Launch button
+      document.getElementById('btn-launch').addEventListener('click', function () {
+        const topic  = document.getElementById('input-topic').value.trim();
+        const apiKey = "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";
+        const providerModel = "groq:llama-3.1-8b-instant";
+
+        if (!topic) { showToast('⚠️ Please enter a research topic.', 'warning'); return; }
+
+        runPipeline(topic, apiKey, providerModel);
+      });
+
+      // Copy report
+      document.getElementById('btn-copy').addEventListener('click', async function () {
+        if (!finalReport) return;
+        try {
+          await navigator.clipboard.writeText(finalReport);
+          showToast('📋 Copied to clipboard!', 'success');
+        } catch { showToast('❌ Copy failed — please copy manually.', 'error'); }
+      });
+
+      // Download full report
+      document.getElementById('btn-download').addEventListener('click', function () {
+        if (!finalReport) return;
+        downloadMd(finalReport, topicSlug() + '-full-report.md');
+      });
+
+      // Download article only
+      document.getElementById('btn-download-article').addEventListener('click', function () {
+        if (!articleDraft) return;
+        downloadMd(articleDraft, topicSlug() + '-article.md');
+      });
+
+      // Download Word document
+      document.getElementById('btn-download-word').addEventListener('click', function () {
+        if (!finalReport) return;
+        try {
+          const htmlContent = marked.parse(finalReport);
+          const wordDoc = `
+            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head><meta charset='utf-8'><title>Report</title></head><body>
+            ${htmlContent}
+            </body></html>
+          `;
+          const blob = new Blob(['\ufeff', wordDoc], { type: 'application/msword' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = topicSlug() + '-report.doc';
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('📥 Downloading Word document', 'success');
+        } catch(e) {
+          showToast('❌ Error generating Word document', 'error');
+          console.error(e);
+        }
+      });
+
+      // Download PowerPoint
+      document.getElementById('btn-download-ppt').addEventListener('click', async function () {
+        if (!finalReport) return;
+        try {
+          showToast('⏳ Generating PowerPoint...', 'info');
+          let pres = new PptxGenJS();
+          
+          // Split of markdown by main headings '## ' or '# '
+          const sections = finalReport.split(/(?=\n#{1,2} )/);
+          
+          for (const section of sections) {
+             const lines = section.trim().split('\n');
+             if (lines.length === 0 || !lines[0]) continue;
+             
+             let title = '';
+             let content = '';
+             
+             if (lines[0].startsWith('#')) {
+                title = lines[0].replace(/^#+\s*/, '');
+                content = lines.slice(1).join('\n').trim();
+             } else {
+                title = 'Overview';
+                content = section.trim();
+             }
+             
+             let slide = pres.addSlide();
+             slide.addText(title, { x: 0.5, y: 0.5, w: '90%', h: 1, fontSize: 24, bold: true, color: '363636' });
+             
+             const cleanContent = content
+                .replace(/\*\*(.*?)\*\*/g, '$1') // remove bold
+                .replace(/\*(.*?)\*/g, '$1')     // remove italic
+                .replace(/_(.*?)_/g, '$1');      // remove italic
+             
+             if (cleanContent.length > 0) {
+               slide.addText(cleanContent, { x: 0.5, y: 1.5, w: '90%', h: '75%', fontSize: 14, color: '666666', valign: 'top' });
+             }
+          }
+          
+          await pres.writeFile({ fileName: topicSlug() + '-presentation.pptx' });
+          showToast('📥 Downloading PowerPoint', 'success');
+        } catch(e) {
+          showToast('❌ Error generating PowerPoint', 'error');
+          console.error(e);
+        }
+      });
+    });
+
+  })();
+  </script>
+
+</body>
+</html>
